@@ -412,7 +412,7 @@ const FB = {
   messagingSenderId: "GANTI_SENDER_ID",
   appId:             "GANTI_APP_ID"
 };
-const YT_KEY = "AIzaSyBbmqZsr7bjvshTQLbHdzrBsnVFM4dHgec";
+const YT_KEY = "AIzaSyAO52w6Ahf17iSIYzSBqlCMTzr9sbAdTTY";
 // ═══════════════════════════════════
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
@@ -458,7 +458,7 @@ window.onYouTubeIframeAPIReady = function() {
       origin: window.location.origin||'https://bangpet-spotif.vercel.app'
     },
     events:{
-      onReady: () => { window._ytReady = true; },
+      onReady: () => { window._ytReady = true; showToast('✅ YT Player siap!'); },
       onStateChange: e => {
         if(e.data===YT.PlayerState.PLAYING){
           playing=true; syncPP(true); startProg();
@@ -470,7 +470,7 @@ window.onYouTubeIframeAPIReady = function() {
       },
       onError: e => {
         clearTimeout(window._skipTimer);
-        console.log('YT Error code:', e.data);
+        showToast('❌ YT Error: ' + e.data);
         // error 101/150 = embedding blocked, skip otomatis
         if(e.data===101||e.data===150||e.data===5){
           showToast('Lagu ini diblokir, cari yang lain...');
@@ -599,7 +599,7 @@ window.playSong = function(song, newQ, i) {
     }, 5000);
   } else {
     // YT player belum siap, retry setelah 1.5 detik
-    showToast('Player sedang menyiapkan, tunggu sebentar...');
+    showToast('⏳ YT player belum siap (ytp=' + (typeof ytp) + ')');
     clearTimeout(window._retryPlay);
     window._retryPlay = setTimeout(() => {
       if(ytp && ytp.loadVideoById) {
