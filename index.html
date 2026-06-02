@@ -400,34 +400,14 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:'DM Sans
 
 <div class="toast" id="toast"></div>
 
-<script type="module">
-// ═══════════════════════════════════
-//  GANTI DENGAN API KEY KAMU
-// ═══════════════════════════════════
-const FB = {
-  apiKey:            "GANTI_FIREBASE_API_KEY",
-  authDomain:        "GANTI.firebaseapp.com",
-  projectId:         "GANTI_PROJECT_ID",
-  storageBucket:     "GANTI.appspot.com",
-  messagingSenderId: "GANTI_SENDER_ID",
-  appId:             "GANTI_APP_ID"
-};
+<script>
 const YT_KEY = "AIzaSyBbmqZsr7bjvshTQLbHdzrBsnVFM4dHgec";
-// ═══════════════════════════════════
-
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, doc, setDoc, getDoc, updateDoc, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-
-const fbApp = initializeApp(FB);
-const auth  = getAuth(fbApp);
-const db    = getFirestore(fbApp);
 
 // ── STATE ──
 let ytp, queue=[], idx=0, playing=false, shuf=false, rep=false, me=null, liked=[], curSong=null;
 
 // ── HELPERS ──
-const $  = id => document.getElementById(id);
+const $ = id => document.getElementById(id);
 const fmt = s => { const m=Math.floor(s/60),sec=Math.floor(s%60); return m+':'+(sec<10?'0':'')+sec; };
 window.showToast = msg => {
   const t=$('toast'); t.textContent=msg; t.classList.add('show');
@@ -448,47 +428,27 @@ function syncPP(p) {
 window.onYouTubeIframeAPIReady = function() {
   ytp = new YT.Player('yt-player', {
     height:'200', width:'300',
-    playerVars:{
-      autoplay:1,
-      controls:0,
-      modestbranding:1,
-      rel:0,
-      playsinline:1,
-      enablejsapi:1,
-      origin: window.location.origin||'https://bangpet-spotif.vercel.app'
-    },
+    playerVars:{ autoplay:0, controls:0, modestbranding:1, rel:0, playsinline:1, enablejsapi:1, origin: window.location.origin },
     events:{
-      onReady: () => { window._ytReady = true; showToast('✅ YT Player siap!'); },
+      onReady: () => { window._ytReady = true; },
       onStateChange: e => {
-        if(e.data===YT.PlayerState.PLAYING){
-          playing=true; syncPP(true); startProg();
-          clearTimeout(window._skipTimer);
-          $('yt-player').style.display='none'; // tetap tersembunyi
-        }
+        if(e.data===YT.PlayerState.PLAYING){ playing=true; syncPP(true); startProg(); clearTimeout(window._skipTimer); }
         if(e.data===YT.PlayerState.PAUSED) { playing=false; syncPP(false); }
         if(e.data===YT.PlayerState.ENDED)  { rep ? ytp.seekTo(0) : nextSong(); }
       },
       onError: e => {
         clearTimeout(window._skipTimer);
-        showToast('❌ YT Error: ' + e.data);
-        // error 101/150 = embedding blocked, skip otomatis
-        if(e.data===101||e.data===150||e.data===5){
-          showToast('Lagu ini diblokir, cari yang lain...');
-          setTimeout(()=>nextSong(), 600);
-        } else {
-          showToast('Error memutar video ('+e.data+'), skip...');
-          setTimeout(()=>nextSong(), 600);
-        }
+        showToast('Lagu diblokir, skip otomatis...');
+        setTimeout(()=>nextSong(), 800);
       }
     }
   });
 };
-const ys=document.createElement('script');
-ys.src='https://www.youtube.com/iframe_api';
-document.head.appendChild(ys);
-
-// Muat konten beranda segera, tidak perlu tunggu YT player siap
-loadHome();
+(function(){
+  const ys=document.createElement('script');
+  ys.src='https://www.youtube.com/iframe_api';
+  document.head.appendChild(ys);
+})();
 
 // ── YT SEARCH ──
 async function ytSearch(q, max) {
@@ -496,7 +456,7 @@ async function ytSearch(q, max) {
   try {
     const r = await fetch('https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoCategoryId=10&q='+encodeURIComponent(q)+'&maxResults='+max+'&key='+YT_KEY);
     const d = await r.json();
-    if(d.error){ showToast('YT: '+d.error.message); return []; }
+    if(d.error){ showToast('YT API: '+d.error.message); return []; }
     return (d.items||[]).map(i=>({
       id: i.id.videoId,
       title: i.snippet.title,
@@ -509,28 +469,27 @@ async function ytSearch(q, max) {
 // ── LOAD HOME ──
 async function loadHome() {
   const [indo, world] = await Promise.all([
-    ytSearch('trending lagu indonesia 2024', 12),
-    ytSearch('world music hits 2024', 12)
+    ytSearch('trending lagu indonesia 2025', 12),
+    ytSearch('world music hits 2025', 12)
   ]);
   renderGrid('trending-grid', indo);
   renderGrid('world-grid', world);
   if(indo[0]) {
-    $('feat-img').src    = indo[0].thumb;
+    $('feat-img').src = indo[0].thumb;
     $('feat-title').textContent = indo[0].title;
-    $('feat-sub').textContent   = indo[0].artist;
+    $('feat-sub').textContent = indo[0].artist;
     window._feat = indo[0];
     queue = [...indo, ...world];
   }
   buildChips(); buildGenreGrid();
 }
-window.playFeatured = () => { if(window._feat) playSong(window._feat, queue, 0); };
 
-// ── RENDER GRID (cards for home) ──
+// ── RENDER GRID ──
 function renderGrid(gid, songs) {
   const el=$(gid); if(!el) return;
   el.innerHTML = songs.map((s,i) => {
-    const sj = JSON.stringify(s).replace(/"/g,'&quot;');
-    return `<div class="card" onclick='playSong(${sj},null,${i})'>
+    const sj = JSON.stringify(s).replace(/'/g,"&apos;").replace(/"/g,'&quot;');
+    return `<div class="card" onclick='playSong(${JSON.stringify(s).replace(/"/g,"&quot;")},null,${i})'>
       <div class="card-art"><img src="${s.thumb}" loading="lazy" alt="">
         <div class="pov"><div class="pbtn"><svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg></div></div>
       </div>
@@ -540,13 +499,14 @@ function renderGrid(gid, songs) {
   }).join('');
 }
 
-// ── RENDER LIST ROWS (search results, genre results) ──
+// ── RENDER LIST ──
 function renderList(containerId, songs) {
   const el=$(containerId); if(!el) return;
-  el.innerHTML = `<div class="song-list">${songs.map((s,i)=>{
-    const sj = JSON.stringify(s).replace(/"/g,'&quot;');
+  el.innerHTML = '<div class="song-list">'+songs.map((s,i)=>{
     const id = 'sr-'+containerId+'-'+i;
-    return `<div class="song-row" id="${id}" onclick='playSongFromList(${sj},${JSON.stringify(songs).replace(/"/g,'&quot;')},${i},"${containerId}")'>
+    const sj = JSON.stringify(s).replace(/"/g,'&quot;');
+    const sq = JSON.stringify(songs).replace(/"/g,'&quot;');
+    return `<div class="song-row" id="${id}" onclick='playSongFromList(${sj},${sq},${i},"${containerId}")'>
       <div class="song-row-num">${i+1}</div>
       <div class="eq"><span></span><span></span><span></span></div>
       <div class="song-row-art"><img src="${s.thumb}" loading="lazy" alt=""></div>
@@ -558,22 +518,17 @@ function renderList(containerId, songs) {
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="1" fill="currentColor"/><circle cx="12" cy="12" r="1" fill="currentColor"/><circle cx="12" cy="19" r="1" fill="currentColor"/></svg>
       </button>
     </div>`;
-  }).join('')}</div>`;
+  }).join('')+'</div>';
 }
 
 window.playSongFromList = function(song, songs, i, cid) {
-  queue = songs;
-  idx = i;
-  // reset playing highlight
+  queue = songs; idx = i;
   document.querySelectorAll('.song-row').forEach(r=>r.classList.remove('playing'));
   const row = document.getElementById('sr-'+cid+'-'+i);
   if(row) row.classList.add('playing');
   playSong(song, null, i);
 };
-window.addToQueue = function(song) {
-  queue.push(song);
-  showToast('Ditambahkan ke antrean ♪');
-};
+window.addToQueue = function(song) { queue.push(song); showToast('Ditambahkan ke antrean ♪'); };
 
 // ── PLAY ──
 window.playSong = function(song, newQ, i) {
@@ -586,42 +541,32 @@ window.playSong = function(song, newQ, i) {
     ytp.setVolume(100);
     ytp.loadVideoById({ videoId: song.id });
     playing = true; syncPP(true);
-    if(me) saveHistory(song);
     clearTimeout(window._skipTimer);
     window._skipTimer = setTimeout(() => {
       if(ytp && ytp.getPlayerState) {
         const st = ytp.getPlayerState();
-        if(st === -1 || st === 5) {
-          showToast('Video ini tidak bisa diputar, skip ke berikutnya...');
-          nextSong();
-        }
+        if(st === -1 || st === 5) { showToast('Video tidak bisa diputar, skip...'); nextSong(); }
       }
-    }, 5000);
+    }, 6000);
   } else {
-    // YT player belum siap, retry setelah 1.5 detik
-    showToast('⏳ YT player belum siap (ytp=' + (typeof ytp) + ')');
+    showToast('Player belum siap, coba lagi...');
     clearTimeout(window._retryPlay);
-    window._retryPlay = setTimeout(() => {
-      if(ytp && ytp.loadVideoById) {
-        window.playSong(song, null, i);
-      } else {
-        showToast('Player belum siap, coba klik lagi.');
-      }
-    }, 1500);
+    window._retryPlay = setTimeout(() => { if(ytp && ytp.loadVideoById) window.playSong(song,null,i); }, 1500);
   }
 };
+window.playFeatured = () => { if(window._feat) playSong(window._feat, queue, 0); };
 
 function updatePlayerUI(song) {
-  $('p-img').src   = song.thumb;
-  $('p-title').textContent  = song.title;
+  $('p-img').src = song.thumb;
+  $('p-title').textContent = song.title;
   $('p-artist').textContent = song.artist;
-  $('mp-img').src  = song.thumb;
+  $('mp-img').src = song.thumb;
   $('mp-title').textContent = song.title;
-  $('mp-sub').textContent   = song.artist;
+  $('mp-sub').textContent = song.artist;
   const isLiked = liked.includes(song.id);
   $('like-btn').classList.toggle('on', isLiked);
   $('mp-like').classList.toggle('on', isLiked);
-  document.title = song.title + ' \u2013 Bangpet Spotif';
+  document.title = song.title + ' – Bangpet Spotif';
 }
 
 // ── PROGRESS ──
@@ -632,24 +577,24 @@ function startProg() {
     if(!ytp||!ytp.getCurrentTime) return;
     const cur=ytp.getCurrentTime(), dur=ytp.getDuration()||0;
     if(!dur) return;
-    const pct = (cur/dur)*100;
-    $('prog-fill').style.width = pct+'%';
-    $('prog-seek').value = pct;
-    $('mp-fill').style.width   = pct+'%';
-    $('p-cur').textContent = fmt(cur);
-    $('p-dur').textContent = fmt(dur);
+    const pct=(cur/dur)*100;
+    $('prog-fill').style.width=pct+'%';
+    $('prog-seek').value=pct;
+    $('mp-fill').style.width=pct+'%';
+    $('p-cur').textContent=fmt(cur);
+    $('p-dur').textContent=fmt(dur);
   }, 500);
 }
 window.seekTo = v => { if(ytp&&ytp.getDuration) ytp.seekTo((v/100)*ytp.getDuration()); };
 
 // ── CONTROLS ──
-window.togglePlay  = () => { if(!ytp||!ytp.getPlayerState) return; playing?ytp.pauseVideo():ytp.playVideo(); };
-window.nextSong    = () => { if(!queue.length) return; idx=shuf?Math.floor(Math.random()*queue.length):(idx+1)%queue.length; playSong(queue[idx],null,idx); };
-window.prevSong    = () => { if(!queue.length) return; idx=(idx-1+queue.length)%queue.length; playSong(queue[idx],null,idx); };
-window.toggleShuf  = () => { shuf=!shuf; $('shuf-btn').classList.toggle('on',shuf); };
-window.toggleRep   = () => { rep=!rep;   $('rep-btn').classList.toggle('on',rep); };
-window.setVol      = v => { if(ytp&&ytp.setVolume) ytp.setVolume(parseInt(v)); };
-window.toggleMute  = () => { if(!ytp) return; ytp.isMuted()?ytp.unMute():ytp.mute(); };
+window.togglePlay = () => { if(!ytp||!ytp.getPlayerState) return; playing?ytp.pauseVideo():ytp.playVideo(); };
+window.nextSong   = () => { if(!queue.length) return; idx=shuf?Math.floor(Math.random()*queue.length):(idx+1)%queue.length; playSong(queue[idx],null,idx); };
+window.prevSong   = () => { if(!queue.length) return; idx=(idx-1+queue.length)%queue.length; playSong(queue[idx],null,idx); };
+window.toggleShuf = () => { shuf=!shuf; $('shuf-btn').classList.toggle('on',shuf); };
+window.toggleRep  = () => { rep=!rep; $('rep-btn').classList.toggle('on',rep); };
+window.setVol     = v => { if(ytp&&ytp.setVolume) ytp.setVolume(parseInt(v)); };
+window.toggleMute = () => { if(!ytp) return; ytp.isMuted()?ytp.unMute():ytp.mute(); };
 
 // ── SEARCH ──
 let stimer;
@@ -668,10 +613,10 @@ window.doSearch = val => {
 
 // ── GENRE ──
 const GENRES=[
-  {n:'Pop',q:'pop hits 2024',c:'#e91e63'},{n:'Hip-Hop',q:'hip hop rap 2024',c:'#9c27b0'},
-  {n:'Dangdut',q:'dangdut terpopuler 2024',c:'#ff5722'},{n:'K-Pop',q:'kpop 2024',c:'#2196f3'},
-  {n:'Rock',q:'rock music 2024',c:'#607d8b'},{n:'EDM',q:'edm dance 2024',c:'#00bcd4'},
-  {n:'R&B',q:'rnb soul 2024',c:'#795548'},{n:'Klasik',q:'classical music',c:'#4caf50'},
+  {n:'Pop',q:'pop hits 2025',c:'#e91e63'},{n:'Hip-Hop',q:'hip hop rap 2025',c:'#9c27b0'},
+  {n:'Dangdut',q:'dangdut terpopuler 2025',c:'#ff5722'},{n:'K-Pop',q:'kpop 2025',c:'#2196f3'},
+  {n:'Rock',q:'rock music 2025',c:'#607d8b'},{n:'EDM',q:'edm dance 2025',c:'#00bcd4'},
+  {n:"R&B",q:'rnb soul 2025',c:'#795548'},{n:'Klasik',q:'classical music',c:'#4caf50'},
 ];
 function buildChips() {
   $('genre-chips').innerHTML = GENRES.map(g=>`<div class="chip" onclick="loadGenre('${g.q}','${g.n}')">${g.n}</div>`).join('');
@@ -692,75 +637,32 @@ window.loadGenre = async(q,n) => {
   renderList('g-grid',res); queue=res;
 };
 
-// ── LIKE ──
-window.toggleLike = async() => {
-  if(!me){ openM('login'); return; }
+// ── LIKE (lokal, tanpa Firebase) ──
+window.toggleLike = () => {
   if(!curSong) return;
-  const vid=curSong.id, ref=doc(db,'users',me.uid);
-  const song={id:vid,title:curSong.title,artist:curSong.artist,thumb:curSong.thumb};
+  const vid=curSong.id;
   if(liked.includes(vid)){
     liked=liked.filter(x=>x!==vid);
-    await updateDoc(ref,{likedSongs:arrayRemove(song)});
     $('like-btn').classList.remove('on');
     $('mp-like').classList.remove('on');
     showToast('Dihapus dari disukai');
   } else {
     liked.push(vid);
-    await updateDoc(ref,{likedSongs:arrayUnion(song)});
     $('like-btn').classList.add('on');
     $('mp-like').classList.add('on');
     showToast('Ditambahkan ke disukai ♥');
   }
 };
-async function saveHistory(song){ try{ await updateDoc(doc(db,'users',me.uid),{history:arrayUnion({...song,ts:Date.now()})}); }catch(e){} }
 async function loadLib() {
-  if(!me) return;
-  const snap=await getDoc(doc(db,'users',me.uid));
-  const data=(snap.data())||{};
-  liked=(data.likedSongs||[]).map(s=>s.id||s);
-  const songs=(data.likedSongs||[]).filter(s=>s.id);
   const c=$('lib-content');
-  if(!songs.length){ c.innerHTML='<div style="text-align:center;padding:50px;color:var(--txt2);">Belum ada lagu disukai.</div>'; return; }
-  c.innerHTML='<div class="sec-title">♥ Disukai ('+songs.length+')</div><div id="liked-grid"></div>';
-  renderList('liked-grid',songs);
+  c.innerHTML='<div style="text-align:center;padding:50px;color:var(--txt2);">Fitur koleksi butuh login (segera hadir).</div>';
 }
 
-// ── AUTH ──
-window.doRegister = async() => {
-  const name=$('r-name').value.trim(), email=$('r-email').value.trim(), pass=$('r-pass').value;
-  const err=$('rerr'); err.classList.remove('show');
-  if(!name||!email||!pass){ err.textContent='Semua field wajib diisi'; err.classList.add('show'); return; }
-  if(pass.length<6){ err.textContent='Password min. 6 karakter'; err.classList.add('show'); return; }
-  try {
-    const c=await createUserWithEmailAndPassword(auth,email,pass);
-    await updateProfile(c.user,{displayName:name});
-    await setDoc(doc(db,'users',c.user.uid),{name,email,likedSongs:[],history:[],createdAt:Date.now()});
-    closeM('register'); showToast('Selamat datang, '+name+'! 🎉');
-  } catch(e){ err.textContent=fbErr(e.code); err.classList.add('show'); }
-};
-window.doLogin = async() => {
-  const email=$('l-email').value.trim(), pass=$('l-pass').value;
-  const err=$('lerr'); err.classList.remove('show');
-  try {
-    await signInWithEmailAndPassword(auth,email,pass);
-    closeM('login'); showToast('Berhasil masuk! 🎵');
-  } catch(e){ err.textContent=fbErr(e.code); err.classList.add('show'); }
-};
-window.doLogout = async() => { await signOut(auth); showToast('Sampai jumpa!'); };
-window.needLogin = () => { if(!me) openM('login'); };
-function fbErr(c){ return {'auth/invalid-email':'Email tidak valid','auth/user-not-found':'Akun tidak ditemukan','auth/wrong-password':'Kata sandi salah','auth/email-already-in-use':'Email sudah terdaftar','auth/weak-password':'Password terlalu lemah','auth/invalid-credential':'Email atau password salah'}[c]||'Error: '+c; }
-onAuthStateChanged(auth, async user=>{
-  me=user;
-  if(user){
-    $('auth-btns').style.display='none'; $('uchip').style.display='flex';
-    $('uavatar').textContent=(user.displayName||user.email)[0].toUpperCase();
-    $('uname').textContent=user.displayName||user.email.split('@')[0];
-    const snap=await getDoc(doc(db,'users',user.uid));
-    liked=((snap.data()||{}).likedSongs||[]).map(s=>s.id||s);
-  } else {
-    $('auth-btns').style.display='flex'; $('uchip').style.display='none'; liked=[];
-  }
-});
+// ── AUTH (disabled) ──
+window.doRegister = () => showToast('Fitur daftar segera hadir!');
+window.doLogin    = () => showToast('Fitur login segera hadir!');
+window.doLogout   = () => showToast('Fitur logout segera hadir!');
+window.needLogin  = () => showToast('Fitur ini butuh login — segera hadir!');
 
 // ── NAVIGATION ──
 window.gotoPage = name => {
@@ -768,60 +670,49 @@ window.gotoPage = name => {
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('on'));
   const pg=$('page-'+name); if(pg) pg.classList.add('active');
   if(name==='library') loadLib();
-  if(name==='search')  setTimeout(()=>{ const si=$('srch-input'); if(si) si.focus(); },100);
+  if(name==='search') setTimeout(()=>{ const si=$('srch-input'); if(si) si.focus(); },100);
 };
-window.setBN = id => { document.querySelectorAll('.bni').forEach(b=>b.classList.remove('on')); const el=$(id); if(el) el.classList.add('on'); };
-window.openM    = m => $( m+'-modal').classList.add('show');
-window.closeM   = m => $(m+'-modal').classList.remove('show');
-window.switchM  = (a,b) => { closeM(a); setTimeout(()=>openM(b),180); };
+window.setBN  = id => { document.querySelectorAll('.bni').forEach(b=>b.classList.remove('on')); const el=$(id); if(el) el.classList.add('on'); };
+window.openM  = m => $(m+'-modal').classList.add('show');
+window.closeM = m => $(m+'-modal').classList.remove('show');
+window.switchM= (a,b) => { closeM(a); setTimeout(()=>openM(b),180); };
 document.querySelectorAll('.moverlay').forEach(el=>el.addEventListener('click',e=>{ if(e.target===el) el.classList.remove('show'); }));
-window.openSB   = () => { $('sidebar').classList.add('open'); $('sboverlay').classList.add('show'); };
-window.closeSB  = () => { $('sidebar').classList.remove('open'); $('sboverlay').classList.remove('show'); };
+window.openSB = () => { $('sidebar').classList.add('open'); $('sboverlay').classList.add('show'); };
+window.closeSB= () => { $('sidebar').classList.remove('open'); $('sboverlay').classList.remove('show'); };
 
-// ── AUDIO UNLOCK ──
-// Desktop tidak perlu tap-to-unlock, langsung unlock
+// ── AUDIO UNLOCK (mobile) ──
 window._audioUnlocked = window.innerWidth > 640;
-
 window.unlockAudio = function() {
-  // play + immediate pause untuk "unlock" audio context di browser mobile
-  if(ytp && ytp.playVideo) {
-    ytp.unMute();
-    ytp.setVolume(100);
-    ytp.playVideo();
-    setTimeout(()=>{
-      if(!window._pendingSong) ytp.pauseVideo();
-    }, 300);
-  }
+  if(ytp && ytp.playVideo) { ytp.unMute(); ytp.setVolume(100); ytp.playVideo(); setTimeout(()=>{ if(!window._pendingSong) ytp.pauseVideo(); },300); }
   $('audio-unlock').classList.add('hidden');
   window._audioUnlocked = true;
-  // kalau ada lagu pending, putar sekarang
   if(window._pendingSong) {
-    const {song, q, i} = window._pendingSong;
-    window._pendingSong = null;
-    playSong(song, q, i);
+    const {song,q,i}=window._pendingSong; window._pendingSong=null;
+    playSong(song,q,i);
   }
 };
 
-// ── OVERRIDE playSong UNTUK CEK UNLOCK ──
-// Simpan referensi ke fungsi asli SEBELUM di-override
-const _origPlay = window.playSong.bind(window);
+// Wrap playSong untuk mobile unlock
+const _realPlay = window.playSong;
 window.playSong = function(song, newQ, i) {
   if(!window._audioUnlocked) {
-    window._pendingSong = {song, q: newQ, i};
+    window._pendingSong={song,q:newQ,i};
     $('audio-unlock').classList.remove('hidden');
-    updatePlayerUI(song);
-    return;
+    updatePlayerUI(song); return;
   }
-  _origPlay(song, newQ, i);
+  _realPlay(song, newQ, i);
 };
 
-// keyboard
+// keyboard shortcuts
 document.addEventListener('keydown',e=>{
   if(e.target.tagName==='INPUT') return;
   if(e.code==='Space'){ e.preventDefault(); togglePlay(); }
   if(e.code==='ArrowRight') nextSong();
   if(e.code==='ArrowLeft')  prevSong();
 });
+
+// Init
+loadHome();
 </script>
 </body>
 </html>
